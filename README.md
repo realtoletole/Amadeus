@@ -16,6 +16,9 @@ editing gives you someone else. No assets from the show are included.
 > journal entry after each conversation. Her trust accumulates on a
 > 60-day half-life, and past a threshold, her avatar starts to blush.
 
+
+ ![Amadeus demo](amadeus-demo.gif)
+
 ## What it does
 
 - **Persistent memory.** Seven memory types in one SQLite file. After
