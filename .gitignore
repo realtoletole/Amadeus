@@ -1,0 +1,9 @@
+.venv/
+__pycache__/
+*.pyc
+*.egg-info/
+.pytest_cache/
+.env
+# user data, model weights, and avatar models live outside the repo
+# (~/.amadeus/), but never commit them if copied in for testing
+models/

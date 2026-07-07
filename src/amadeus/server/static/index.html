@@ -1,0 +1,555 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Amadeus</title>
+<style>
+  :root {
+    --bg: #000000;
+    --panel: #1c1e24;
+    --line: #2a2d35;
+    --ink: #e9e7e2;
+    --muted: #82868f;
+    --crimson: #c73e3a;
+    --crimson-soft: rgba(199, 62, 58, 0.16);
+    --mono: "Cascadia Code", Consolas, "SF Mono", ui-monospace, Menlo, monospace;
+    --body: "Segoe UI", system-ui, -apple-system, sans-serif;
+  }
+  * { box-sizing: border-box; margin: 0; }
+  html, body { height: 100%; overflow: hidden; }
+  body {
+    background: #000;
+    color: var(--ink);
+    font-family: var(--body);
+  }
+  .app { width: 100%; height: 100dvh; }
+
+  header {
+    position: fixed;
+    top: 0; left: 0; right: 0;
+    z-index: 3;
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    padding: 16px 26px 12px;
+    background: linear-gradient(rgba(0,0,0,0.8), rgba(0,0,0,0));
+    pointer-events: none;
+  }
+  .wordmark {
+    font-family: var(--mono);
+    font-size: 15px;
+    font-weight: 600;
+    letter-spacing: 0.42em;
+    color: var(--ink);
+  }
+  .wordmark .a { color: var(--crimson); }
+  .status {
+    font-family: var(--mono);
+    font-size: 11px;
+    letter-spacing: 0.08em;
+    color: var(--muted);
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+  .dot {
+    width: 7px; height: 7px; border-radius: 50%;
+    background: var(--muted);
+  }
+  .dot.online { background: var(--crimson); box-shadow: 0 0 8px var(--crimson-soft); }
+
+  /* Fullscreen character stage */
+  .presence-wrap { position: fixed; inset: 0; z-index: 0; }
+  .presence-wrap canvas { position: absolute; inset: 0; display: block; width: 100%; height: 100%; }
+
+  /* Translucent conversation panel over the stage */
+  .overlay {
+    position: fixed;
+    left: 50%;
+    transform: translateX(-50%);
+    bottom: 18px;
+    width: min(860px, calc(100% - 28px));
+    z-index: 2;
+    background: rgba(8, 8, 10, 0.72);
+    border: 1px solid rgba(199, 62, 58, 0.22);
+    border-radius: 12px;
+    backdrop-filter: blur(12px);
+    -webkit-backdrop-filter: blur(12px);
+    padding: 6px 18px 12px;
+    box-shadow: 0 10px 40px rgba(0, 0, 0, 0.45);
+  }
+
+  main {
+    max-height: 30dvh;
+    overflow-y: auto;
+    padding: 14px 4px 10px;
+    scrollbar-width: thin;
+    scrollbar-color: var(--line) transparent;
+    mask-image: linear-gradient(transparent, black 22px);
+    -webkit-mask-image: linear-gradient(transparent, black 22px);
+  }
+  .empty {
+    color: var(--muted);
+    font-family: var(--mono);
+    font-size: 12.5px;
+    letter-spacing: 0.05em;
+    padding-top: 40px;
+    text-align: center;
+  }
+
+  .entry { margin-bottom: 18px; }
+  .meta {
+    font-family: var(--mono);
+    font-size: 10.5px;
+    letter-spacing: 0.14em;
+    color: var(--muted);
+    margin-bottom: 7px;
+  }
+  .entry.amadeus .meta { color: var(--crimson); }
+  .body {
+    font-size: 15px;
+    line-height: 1.6;
+    white-space: pre-wrap;
+    overflow-wrap: break-word;
+    text-shadow: 0 1px 3px rgba(0, 0, 0, 0.55);
+  }
+  .entry.amadeus .body {
+    border-left: 2px solid var(--crimson);
+    padding-left: 16px;
+  }
+  .entry.user .body { color: #c9c7c2; }
+  .flag {
+    font-family: var(--mono);
+    font-size: 10.5px;
+    letter-spacing: 0.1em;
+    color: var(--muted);
+    margin-left: 8px;
+  }
+  .entry.error .body { color: var(--muted); font-style: italic; border-left: 2px solid var(--line); padding-left: 16px; }
+
+  form {
+    display: flex;
+    gap: 10px;
+    align-items: flex-end;
+    padding: 10px 0 0;
+    border-top: 1px solid rgba(199, 62, 58, 0.18);
+  }
+  textarea {
+    flex: 1;
+    resize: none;
+    background: rgba(16, 16, 18, 0.9);
+    border: 1px solid var(--line);
+    border-radius: 6px;
+    color: var(--ink);
+    font-family: var(--body);
+    font-size: 15px;
+    line-height: 1.5;
+    padding: 11px 14px;
+    max-height: 180px;
+    outline: none;
+  }
+  textarea:focus-visible { border-color: var(--crimson); }
+  textarea:disabled { opacity: 0.45; }
+  button {
+    font-family: var(--mono);
+    font-size: 12px;
+    letter-spacing: 0.1em;
+    padding: 12px 20px;
+    border-radius: 6px;
+    border: 1px solid var(--crimson);
+    background: transparent;
+    color: var(--crimson);
+    cursor: pointer;
+  }
+  button:hover, button:focus-visible { background: var(--crimson-soft); outline: none; }
+  button.stop { border-color: var(--muted); color: var(--muted); }
+  .gear {
+    pointer-events: auto;
+    background: none; border: none; padding: 4px 10px;
+    color: var(--muted); font-family: var(--mono); font-size: 11px;
+    letter-spacing: 0.12em; cursor: pointer;
+  }
+  .gear:hover { color: var(--crimson); background: none; }
+  #settings-panel {
+    display: none;
+    position: fixed; inset: 0; z-index: 10;
+    background: rgba(0,0,0,0.6);
+  }
+  #settings-panel.open { display: flex; align-items: center; justify-content: center; }
+  .panel {
+    width: min(560px, calc(100% - 32px));
+    max-height: 86dvh; overflow-y: auto;
+    background: rgba(10,10,12,0.95);
+    border: 1px solid rgba(199,62,58,0.3); border-radius: 12px;
+    padding: 22px 24px; backdrop-filter: blur(14px);
+  }
+  .panel h2 {
+    font-family: var(--mono); font-size: 12px; letter-spacing: 0.2em;
+    color: var(--crimson); margin: 18px 0 10px; font-weight: 600;
+  }
+  .panel h2:first-child { margin-top: 0; }
+  .field { display: flex; align-items: center; gap: 10px; margin-bottom: 9px; }
+  .field label { flex: 0 0 150px; font-size: 13px; color: var(--muted); }
+  .field input[type="text"], .field input[type="number"], .field select {
+    flex: 1; background: rgba(22,22,26,0.9); border: 1px solid var(--line);
+    border-radius: 5px; color: var(--ink); padding: 7px 10px; font-size: 13.5px;
+  }
+  .field input:focus-visible, .field select:focus-visible { border-color: var(--crimson); outline: none; }
+  #persona-text {
+    width: 100%; min-height: 180px; background: rgba(22,22,26,0.9);
+    border: 1px solid var(--line); border-radius: 6px; color: var(--ink);
+    font-family: var(--mono); font-size: 12.5px; line-height: 1.5; padding: 10px;
+  }
+  .panel-actions { display: flex; gap: 10px; margin-top: 14px; align-items: center; }
+  .panel-note { font-size: 12px; color: var(--muted); font-family: var(--mono); }
+  .panel-note.ok { color: #7fbf7f; }
+  button.active { background: var(--crimson-soft); }
+  button:disabled { opacity: 0.4; cursor: default; }
+</style>
+</head>
+<body>
+<div class="app">
+  <header>
+    <div class="wordmark"><span class="a">A</span>MADEUS</div>
+    <div class="status"><button type="button" class="gear" id="gear">SETTINGS</button><span class="dot" id="dot"></span><span id="status">connecting</span></div>
+  </header>
+  <div class="presence-wrap" id="avatar-wrap"></div>
+  <div class="overlay">
+  <main id="log"><div class="empty" id="empty">— session open. say something —</div></main>
+  <form id="composer">
+    <textarea id="input" rows="1" placeholder="Message Amadeus" autofocus></textarea>
+    <button type="submit" id="send">SEND</button>
+    <button type="button" id="voice">VOICE</button>
+  </form>
+  </div>
+
+  <div id="settings-panel">
+    <div class="panel">
+      <h2>MODELS &amp; VOICE</h2>
+      <div class="field"><label>Brain (LLM)</label><select id="s-llm_model"></select></div>
+      <div class="field"><label>Voice</label><select id="s-tts_voice"></select></div>
+      <div class="field"><label>Speak typed replies</label><select id="s-speak_replies"><option value="true">on</option><option value="false">off</option></select></div>
+      <h2>HEARING</h2>
+      <div class="field"><label>Whisper model</label><select id="s-stt_model"></select></div>
+      <div class="field"><label>Whisper device</label><select id="s-stt_device"></select></div>
+      <div class="field"><label>Mic sensitivity (0-1)</label><input type="number" id="s-vad_threshold" step="0.05" min="0.1" max="0.95"></div>
+      <div class="field"><label>Pause before reply (ms)</label><input type="number" id="s-utterance_end_ms" step="50" min="200" max="3000"></div>
+      <div class="field"><label>Barge-in after (ms)</label><input type="number" id="s-barge_in_ms" step="50" min="150" max="2000"></div>
+      <h2>AVATAR FRAMING</h2>
+      <div class="field"><label>Scale</label><input type="number" id="s-avatar_scale" step="0.05" min="0.2" max="4"></div>
+      <div class="field"><label>Vertical offset</label><input type="number" id="s-avatar_offset_y" step="0.02" min="-1" max="1"></div>
+      <div class="panel-actions">
+        <button type="button" id="save-settings">SAVE SETTINGS</button>
+        <span class="panel-note" id="settings-note"></span>
+      </div>
+      <h2>CHARACTER (persona.md)</h2>
+      <textarea id="persona-text" spellcheck="false"></textarea>
+      <div class="panel-actions">
+        <button type="button" id="save-persona">SAVE CHARACTER</button>
+        <span class="panel-note" id="persona-note"></span>
+        <button type="button" id="close-settings" style="margin-left:auto">CLOSE</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script src="/avatar.js"></script>
+<script>
+"use strict";
+const log = document.getElementById("log");
+const input = document.getElementById("input");
+const sendBtn = document.getElementById("send");
+const statusEl = document.getElementById("status");
+const dot = document.getElementById("dot");
+const emptyEl = document.getElementById("empty");
+
+let ws = null;
+let streaming = false;
+let currentBody = null;
+let modelLabel = "";
+
+/* shared TTS playback — one queue for text-mode and voice-mode replies.
+   The context is created/resumed inside user gestures (SEND / VOICE click)
+   to satisfy browser autoplay policy. */
+let playCtx = null, playTime = 0, scheduled = [], ttsRate = 24000;
+let analyser = null;
+const levelBuf = new Uint8Array(512);
+function ensurePlayback() {
+  if (!playCtx) {
+    playCtx = new AudioContext({ sampleRate: 24000 });
+    analyser = playCtx.createAnalyser();
+    analyser.fftSize = 512;
+    analyser.connect(playCtx.destination);
+  }
+  playCtx.resume();
+}
+function getVoiceLevel() {
+  if (!analyser) return 0;
+  analyser.getByteTimeDomainData(levelBuf);
+  let sum = 0;
+  for (let i = 0; i < levelBuf.length; i++) {
+    const v = (levelBuf[i] - 128) / 128;
+    sum += v * v;
+  }
+  return Math.sqrt(sum / levelBuf.length);
+}
+function playChunk(buffer) {
+  if (!playCtx) return;
+  const pcm = new Int16Array(buffer);
+  const floats = new Float32Array(pcm.length);
+  for (let i = 0; i < pcm.length; i++) floats[i] = pcm[i] / 32768;
+  const audioBuffer = playCtx.createBuffer(1, floats.length, ttsRate);
+  audioBuffer.copyToChannel(floats, 0);
+  const node = playCtx.createBufferSource();
+  node.buffer = audioBuffer;
+  node.connect(analyser);
+  playTime = Math.max(playTime, playCtx.currentTime + 0.05);
+  node.start(playTime);
+  playTime += audioBuffer.duration;
+  scheduled.push(node);
+  node.onended = () => { scheduled = scheduled.filter((n) => n !== node); };
+}
+function stopPlayback() {
+  for (const node of scheduled) { try { node.stop(); } catch (e) {} }
+  scheduled = [];
+  if (playCtx) playTime = playCtx.currentTime;
+}
+
+function timestamp() {
+  return new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
+}
+
+function addEntry(kind, label, text) {
+  if (emptyEl.parentNode) emptyEl.remove();
+  const entry = document.createElement("div");
+  entry.className = "entry " + kind;
+  const meta = document.createElement("div");
+  meta.className = "meta";
+  meta.textContent = label + " \u00b7 " + timestamp();
+  const body = document.createElement("div");
+  body.className = "body";
+  body.textContent = text;
+  entry.append(meta, body);
+  log.append(entry);
+  log.scrollTop = log.scrollHeight;
+  return body;
+}
+
+function setStreaming(on) {
+  if (on && !streaming) avatar.setState("thinking");
+  if (!on) avatar.setState("idle");
+  streaming = on;
+  sendBtn.textContent = on ? "STOP" : "SEND";
+  sendBtn.classList.toggle("stop", on);
+}
+
+function finishReply(flagText) {
+  if (flagText && currentBody) {
+    const flag = document.createElement("span");
+    flag.className = "flag";
+    flag.textContent = flagText;
+    currentBody.append(flag);
+  }
+  currentBody = null;
+  setStreaming(false);
+}
+
+function connect() {
+  ws = new WebSocket((location.protocol === "https:" ? "wss://" : "ws://") + location.host + "/ws/chat");
+  ws.binaryType = "arraybuffer";
+  ws.onopen = () => { dot.classList.add("online"); };
+  ws.onclose = () => {
+    dot.classList.remove("online");
+    statusEl.textContent = "reconnecting";
+    if (streaming) finishReply("\u2014 connection lost");
+    setTimeout(connect, 1500);
+  };
+  ws.onmessage = (event) => {
+    if (event.data instanceof ArrayBuffer) { playChunk(event.data); return; }
+    const msg = JSON.parse(event.data);
+    if (msg.type === "tts_begin") {
+      ttsRate = msg.sample_rate;
+      ensurePlayback();
+      return;
+    }
+    if (msg.type === "session") {
+      modelLabel = msg.model || "";
+      statusEl.textContent = modelLabel || "online";
+    } else if (msg.type === "token") {
+      if (!currentBody) currentBody = addEntry("amadeus", "AMADEUS", "");
+      currentBody.textContent += msg.text;
+      log.scrollTop = log.scrollHeight;
+    } else if (msg.type === "expression") {
+      avatar.setExpression(msg.name);
+    } else if (msg.type === "done") {
+      finishReply(null);
+    } else if (msg.type === "interrupted") {
+      stopPlayback();
+      avatar.reactInterrupted();
+      finishReply("\u2014 interrupted");
+    } else if (msg.type === "error") {
+      finishReply(null);
+      addEntry("error", "SYSTEM", msg.text);
+    }
+  };
+}
+
+document.getElementById("composer").addEventListener("submit", (event) => {
+  event.preventDefault();
+  ensurePlayback();   // user gesture: arm audio so this reply can be spoken
+  const socket = voice ? voice.socket : ws;   // voice session wins when active
+  if (!socket || socket.readyState !== WebSocket.OPEN) return;
+  if (streaming) {
+    socket.send(JSON.stringify({ type: "stop" }));
+    return;
+  }
+  const text = input.value.trim();
+  if (!text) return;
+  addEntry("user", "YOU", text);
+  socket.send(JSON.stringify({ type: "user_message", text }));
+  input.value = "";
+  input.style.height = "auto";
+  setStreaming(true);
+});
+
+input.addEventListener("keydown", (event) => {
+  if (event.key === "Enter" && !event.shiftKey) {
+    event.preventDefault();
+    sendBtn.click();
+  }
+});
+input.addEventListener("input", () => {
+  input.style.height = "auto";
+  input.style.height = Math.min(input.scrollHeight, 180) + "px";
+});
+
+/* ---- the avatar: her face, driven by conversation state + voice energy ----
+   The stage stays empty until the user's Live2D model loads; there is no
+   built-in character. */
+const avatar = new AmadeusAvatar.AvatarDriver({ render() {} }, getVoiceLevel);
+AmadeusAvatar.createAvatarRenderer(
+  document.getElementById("avatar-wrap"),
+  (message) => addEntry("error", "SYSTEM", message)
+).then((live2d) => { if (live2d) avatar.renderer = live2d; });
+
+connect();
+
+/* ---------------- voice mode ---------------- */
+const voiceBtn = document.getElementById("voice");
+let voice = null;
+
+const MIC_WORKLET = `
+class MicCapture extends AudioWorkletProcessor {
+  process(inputs) {
+    const channel = inputs[0][0];
+    if (channel) this.port.postMessage(channel.slice(0));
+    return true;
+  }
+}
+registerProcessor("mic-capture", MicCapture);
+`;
+
+async function startVoice() {
+  const socket = new WebSocket((location.protocol === "https:" ? "wss://" : "ws://") + location.host + "/ws/voice");
+  socket.binaryType = "arraybuffer";
+
+  const micCtx = new AudioContext({ sampleRate: 16000 });
+  if (micCtx.state === "suspended") await micCtx.resume();
+  await micCtx.audioWorklet.addModule(
+    URL.createObjectURL(new Blob([MIC_WORKLET], { type: "text/javascript" }))
+  );
+  const stream = await navigator.mediaDevices.getUserMedia({
+    audio: { echoCancellation: true, noiseSuppression: true, autoGainControl: true },
+  });
+  const source = micCtx.createMediaStreamSource(stream);
+  const worklet = new AudioWorkletNode(micCtx, "mic-capture");
+  source.connect(worklet);
+
+  let sendBuffer = [];
+  let sendLength = 0;
+  worklet.port.onmessage = (event) => {
+    if (socket.readyState !== WebSocket.OPEN) return;
+    sendBuffer.push(event.data);
+    sendLength += event.data.length;
+    if (sendLength >= 2048) {
+      const merged = new Float32Array(sendLength);
+      let offset = 0;
+      for (const part of sendBuffer) { merged.set(part, offset); offset += part.length; }
+      const pcm = new Int16Array(merged.length);
+      for (let i = 0; i < merged.length; i++) {
+        pcm[i] = Math.max(-32768, Math.min(32767, merged[i] * 32768));
+      }
+      socket.send(pcm.buffer);
+      sendBuffer = []; sendLength = 0;
+    }
+  };
+
+  ensurePlayback();  // the VOICE click is the user gesture that arms audio
+
+  socket.onmessage = (event) => {
+    if (event.data instanceof ArrayBuffer) { playChunk(event.data); return; }
+    const msg = JSON.parse(event.data);
+    if (msg.type === "state") {
+      statusEl.textContent = "voice · " + msg.value;
+      avatar.setState(msg.value);
+    } else if (msg.type === "session") {
+      avatar.setEmotion(msg.emotion);
+    } else if (msg.type === "user_transcript") {
+      addEntry("user", "YOU (voice)", msg.text);
+    } else if (msg.type === "token") {
+      if (!currentBody) currentBody = addEntry("amadeus", "AMADEUS", "");
+      currentBody.textContent += msg.text;
+      log.scrollTop = log.scrollHeight;
+    } else if (msg.type === "tts_begin") {
+      ttsRate = msg.sample_rate;
+      ensurePlayback();
+    } else if (msg.type === "expression") {
+      avatar.setExpression(msg.name);
+    } else if (msg.type === "done") {
+      finishReply(null);
+    } else if (msg.type === "interrupted") {
+      stopPlayback();
+      avatar.reactInterrupted();
+      finishReply("— interrupted");
+    } else if (msg.type === "error") {
+      finishReply(null);
+      addEntry("error", "SYSTEM", msg.text);
+      stopVoice();
+    }
+  };
+  socket.onclose = () => { if (voice) stopVoice(); };
+
+  voice = {
+    socket,
+    close() {
+      try { socket.close(); } catch (e) {}
+      stopPlayback();
+      stream.getTracks().forEach((track) => track.stop());
+      micCtx.close();
+    },
+  };
+}
+
+function stopVoice() {
+  if (voice) { voice.close(); voice = null; }
+  voiceBtn.classList.remove("active");
+  voiceBtn.textContent = "VOICE";
+  statusEl.textContent = modelLabel || "online";
+  avatar.setState("idle");
+}
+
+voiceBtn.addEventListener("click", async () => {
+  if (voice) { stopVoice(); return; }
+  voiceBtn.classList.add("active");
+  voiceBtn.textContent = "END";
+  try {
+    await startVoice();
+  } catch (error) {
+    addEntry("error", "SYSTEM", "Microphone unavailable: " + error.message);
+    stopVoice();
+  }
+});
+</script>
+</body>
+</html>

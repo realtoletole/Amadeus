@@ -1,0 +1,47 @@
+[project]
+name = "amadeus"
+version = "0.13.1"
+description = "A persistent AI companion inspired by the Amadeus system from Steins;Gate 0"
+readme = "README.md"
+requires-python = ">=3.11"
+license = { text = "MIT" }
+dependencies = [
+    "pydantic>=2.7",
+    "pydantic-settings>=2.2",
+    "numpy>=1.26",
+    "httpx>=0.27",
+    "fastapi>=0.111",
+    "uvicorn>=0.30",
+    "websockets>=12",
+    "pywebview>=5.1",
+]
+
+[project.optional-dependencies]
+voice = [
+    "faster-whisper>=1.0",
+    "kokoro-onnx>=0.4",
+    "pysilero-vad>=2.0,<3.0",  # 3.x builds C++ from source; 2.x is a pure-python wheel
+]
+dev = [
+    "pytest>=8.0",
+    "pytest-asyncio>=0.23",
+    "ruff>=0.4",
+]
+
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.setuptools.package-data]
+amadeus = ["server/static/*"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+asyncio_mode = "auto"
+
+[tool.ruff]
+line-length = 100
+src = ["src", "tests"]
